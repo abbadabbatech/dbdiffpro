@@ -403,6 +403,7 @@ const DiffEngine = () => {
 };
 
 const AdminDashboard = () => {
+  const { supabase } = useAuth();
   const [view, setView] = useState('list'); // 'list' or 'create'
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -428,7 +429,7 @@ const AdminDashboard = () => {
 
   const handleUpdateStatus = async (id, updates) => {
     try {
-      const { data: { session } } = await window.supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       await axios.put(`/api/admin/users/${id}`, updates, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
@@ -441,7 +442,7 @@ const AdminDashboard = () => {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
-      const { data: { session } } = await window.supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       await axios.post('/api/admin/users', newUser, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
