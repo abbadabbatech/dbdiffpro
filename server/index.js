@@ -59,25 +59,38 @@ const requireRole = (minRole) => (req, res, next) => {
 const { getEdgeFunctions } = require('./lib/supabase-api');
 
 function buildConnectionString(config) {
-  const { url, password, host, db_type } = config;
-  if (!url || !password) return null;
+  const { url, password, host, db_type, username, port, database_name } = config;
+  if (!url && !host) return null;
   
-  const match = url.match(/([a-z0-9]{20})|([a-z0-9]{11})/i);
+  if (db_type === 'mssql') {
+    return {
+      user: username,
+      password: password,
+      server: host,
+      database: database_name,
+      options: { encrypt: true, trustServerCertificate: true }
+    };
+  }
+
+  const match = url?.match(/([a-z0-9]{20})|([a-z0-9]{11})/i);
   const ref = match ? match[0] : null;
 
   if (host) {
     const isPooler = host.includes('pooler.supabase.com');
-    const user = (isPooler && ref) ? `postgres.${ref}` : (config.username || 'postgres');
-    const port = isPooler ? '6543' : (config.port || (db_type === 'mysql' ? '3306' : '5432'));
+    const user = (isPooler && ref) ? `postgres.${ref}` : (username || 'postgres');
+    const finalPort = isPooler ? '6543' : (port || (db_type === 'mysql' ? '3306' : '5432'));
     
     if (db_type === 'mysql') {
-        return { host, user, password, database: config.database_name || config.database, port };
+        return { host, user, password, database: database_name || config.database, port: finalPort };
     }
-    return `postgres://${user}:${encodeURIComponent(password)}@${host}:${port}/${config.database_name || config.database || 'postgres'}`;
+    return `postgres://${user}:${encodeURIComponent(password)}@${host}:${finalPort}/${database_name || config.database || 'postgres'}`;
   }
 
-  if (!ref) return url;
-  return `postgres://postgres:${encodeURIComponent(password)}@db.${ref}.supabase.co:5432/postgres`;
+  if (db_type === 'supabase' && ref) {
+    return `postgres://postgres:${encodeURIComponent(password)}@db.${ref}.supabase.co:5432/postgres`;
+  }
+
+  return url;
 }
 
 app.post('/api/compare', authenticate, async (req, res) => {
@@ -150,6 +163,73 @@ app.post('/api/targets', authenticate, requireAuth, async (req, res) => {
     res.json(data);
 });
 
+// Superadmin: List users
+app.get('/api/admin/users', authenticate, requireRole(5), async (req, res) => {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
+// Superadmin: Update user profile
+app.put('/api/admin/users/:id', authenticate, requireRole(5), async (req, res) => {
+    const { id } = req.params;
+    const { data, error } = await supabase
+        .from('profiles')
+        .update(req.body)
+        .eq('id', id)
+        .select()
+        .single();
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
+// Superadmin: Create new user
+app.post('/api/admin/users', authenticate, requireRole(5), async (req, res) => {
+    const { email, password, full_name, role, tier } = req.body;
+    
+    const { data: { user }, error } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name }
+    });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Profile trigger will handle initial creation, but we update role/tier
+    const { data: profile, error: pError } = await supabase
+        .from('profiles')
+        .update({ role, subscription_tier: tier })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+    if (pError) return res.status(500).json({ error: pError.message });
+    res.json(profile);
+});
+
+// Superadmin: Trigger password reset
+app.post('/api/admin/users/:id/reset-password', authenticate, requireRole(5), async (req, res) => {
+    const { id } = req.params;
+    
+    // Fetch email first
+    const { data: profile } = await supabase.from('profiles').select('email').eq('id', id).single();
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+
+    const { error } = await supabase.auth.admin.generateLink({
+        type: 'recovery',
+        email: profile.email
+    });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, message: 'Password reset link generated' });
+});
+
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 app.get(/.*/, (req, res) => {
@@ -157,6 +237,6 @@ app.get(/.*/, (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });

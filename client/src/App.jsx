@@ -251,8 +251,8 @@ const Targets = () => {
 
 const DiffEngine = () => {
   const { user, supabase } = useAuth();
-  const [source, setSource] = useState({ db_type: 'postgres', url: '', password: '', host: '', port: 5432, username: 'postgres', database: 'postgres' });
-  const [target, setTarget] = useState({ db_type: 'postgres', url: '', password: '', host: '', port: 5432, username: 'postgres', database: 'postgres' });
+  const [source, setSource] = useState({ db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database: 'postgres' });
+  const [target, setTarget] = useState({ db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database: 'postgres' });
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
@@ -276,7 +276,7 @@ const DiffEngine = () => {
   return (
     <div className="animate-fade-in">
         {!user && (
-            <div className="glass card" style={{ marginBottom: '40px', background: 'linear-gradient(135deg, rgba(62, 207, 142, 0.1) 0%, transparent 100%)' }}>
+            <div className="glass card" style={{ marginBottom: '40px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, transparent 100%)' }}>
                 <h1 style={{ fontSize: '2.5rem', marginBottom: '15px' }}>Database Synchronization Made Simple</h1>
                 <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', maxWidth: '800px', marginBottom: '25px' }}>
                     Compare schemas between any two PostgreSQL or MySQL instances. Review differences, generate migration scripts, and synchronize with one click.
@@ -300,18 +300,40 @@ const DiffEngine = () => {
                     <div className="input-group">
                         <label>DB Type</label>
                         <select value={source.db_type} onChange={e => setSource({...source, db_type: e.target.value})}>
-                            <option value="postgres">PostgreSQL</option>
+                            <option value="supabase">Supabase</option>
+                            <option value="postgres">PostgreSQL (General)</option>
                             <option value="mysql">MySQL</option>
+                            <option value="mssql">SQL Server (MSSQL)</option>
                         </select>
                     </div>
+
+                    {source.db_type === 'supabase' && (
+                        <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: '6px', marginBottom: '15px', fontSize: '0.8rem' }}>
+                            <AlertCircle size={14} style={{ marginRight: '5px' }} />
+                            <strong>Pro Tip:</strong> Use the <strong>IPv4 Pooler</strong> host from your dashboard (aws-0-...) in the URL/Host field if you experience connection timeouts.
+                        </div>
+                    )}
+
                     <div className="input-group">
-                        <label>URL / Host</label>
-                        <input value={source.url} onChange={e => setSource({...source, url: e.target.value})} placeholder="db.project.supabase.co" />
+                        <label>{source.db_type === 'mssql' ? 'Server Host' : 'URL / Host'}</label>
+                        <input value={source.url} onChange={e => setSource({...source, url: e.target.value})} placeholder={source.db_type === 'mssql' ? 'your-server.database.windows.net' : 'db.project.supabase.co'} />
                     </div>
+                    {source.db_type === 'mssql' && (
+                        <div className="input-group">
+                            <label>Username</label>
+                            <input value={source.username} onChange={e => setSource({...source, username: e.target.value})} />
+                        </div>
+                    )}
                     <div className="input-group">
                         <label>Password</label>
                         <input type="password" value={source.password} onChange={e => setSource({...source, password: e.target.value})} />
                     </div>
+                    {source.db_type === 'mssql' && (
+                        <div className="input-group">
+                            <label>Database Name</label>
+                            <input value={source.database_name} onChange={e => setSource({...source, database_name: e.target.value})} />
+                        </div>
+                    )}
                 </div>
 
                 <div style={{ alignSelf: 'center', opacity: 0.3 }}><ArrowRight size={32} /></div>
@@ -321,18 +343,40 @@ const DiffEngine = () => {
                     <div className="input-group">
                         <label>DB Type</label>
                         <select value={target.db_type} onChange={e => setTarget({...target, db_type: e.target.value})}>
-                            <option value="postgres">PostgreSQL</option>
+                            <option value="supabase">Supabase</option>
+                            <option value="postgres">PostgreSQL (General)</option>
                             <option value="mysql">MySQL</option>
+                            <option value="mssql">SQL Server (MSSQL)</option>
                         </select>
                     </div>
+
+                    {target.db_type === 'supabase' && (
+                        <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: '6px', marginBottom: '15px', fontSize: '0.8rem' }}>
+                            <AlertCircle size={14} style={{ marginRight: '5px' }} />
+                            <strong>Pro Tip:</strong> Use the <strong>IPv4 Pooler</strong> host (Port 6543) for best reliability.
+                        </div>
+                    )}
+
                     <div className="input-group">
-                        <label>URL / Host</label>
-                        <input value={target.url} onChange={e => setTarget({...target, url: e.target.value})} placeholder="db.target.supabase.co" />
+                        <label>{target.db_type === 'mssql' ? 'Server Host' : 'URL / Host'}</label>
+                        <input value={target.url} onChange={e => setTarget({...target, url: e.target.value})} placeholder={target.db_type === 'mssql' ? 'your-server.database.windows.net' : 'db.target.supabase.co'} />
                     </div>
+                    {target.db_type === 'mssql' && (
+                        <div className="input-group">
+                            <label>Username</label>
+                            <input value={target.username} onChange={e => setTarget({...target, username: e.target.value})} />
+                        </div>
+                    )}
                     <div className="input-group">
                         <label>Password</label>
                         <input type="password" value={target.password} onChange={e => setTarget({...target, password: e.target.value})} />
                     </div>
+                    {target.db_type === 'mssql' && (
+                        <div className="input-group">
+                            <label>Database Name</label>
+                            <input value={target.database_name} onChange={e => setTarget({...target, database_name: e.target.value})} />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -349,7 +393,7 @@ const DiffEngine = () => {
         {results && (
             <div className="animate-fade-in glass card" style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <h2>Found {results.scripts.length} Differences</h2>
+                    <h2>Found {results?.scripts?.length || 0} Differences</h2>
                 </div>
                 {/* Result list logic would go here, same as before but integrated... */}
             </div>
@@ -358,10 +402,199 @@ const DiffEngine = () => {
   );
 };
 
+const AdminDashboard = () => {
+  const [view, setView] = useState('list'); // 'list' or 'create'
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [newUser, setNewUser] = useState({ email: '', password: '', full_name: '', role: 1, tier: 'free' });
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await axios.get('/api/admin/users', {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      setUsers(res.data);
+    } catch (err) {
+      console.error('Fetch users error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
+
+  const handleUpdateStatus = async (id, updates) => {
+    try {
+      const { data: { session } } = await window.supabase.auth.getSession();
+      await axios.put(`/api/admin/users/${id}`, updates, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      fetchUsers();
+    } catch (err) {
+      alert('Update failed: ' + err.message);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    try {
+      const { data: { session } } = await window.supabase.auth.getSession();
+      await axios.post('/api/admin/users', newUser, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      alert('User created successfully!');
+      setView('list');
+      fetchUsers();
+    } catch (err) {
+      alert('Creation failed: ' + err.message);
+    }
+  };
+
+  return (
+    <div className="animate-fade-in">
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', alignItems: 'center' }}>
+        <h1>Superadmin</h1>
+        <div style={{ flex: 1, display: 'flex', gap: '10px' }}>
+          <button className={`btn ${view === 'list' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setView('list')}>
+            <Users size={18} /> User List
+          </button>
+          <button className={`btn ${view === 'create' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setView('create')}>
+            <Plus size={18} /> Create User
+          </button>
+        </div>
+      </div>
+
+      {view === 'list' ? (
+        <div className="glass card">
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <th style={{ padding: '12px' }}>Name / Email</th>
+                <th style={{ padding: '12px' }}>Role</th>
+                <th style={{ padding: '12px' }}>Tier</th>
+                <th style={{ padding: '12px' }}>Created</th>
+                <th style={{ padding: '12px' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '12px' }}>
+                    <div style={{ fontWeight: 600 }}>{u.full_name}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</div>
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <select 
+                      value={u.role} 
+                      onChange={(e) => handleUpdateStatus(u.id, { role: parseInt(e.target.value) })}
+                      style={{ background: 'transparent', color: 'inherit', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 5px' }}
+                    >
+                      <option value={1}>Member (1)</option>
+                      <option value={2}>Lead (2)</option>
+                      <option value={5}>Superadmin (5)</option>
+                    </select>
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <select 
+                      value={u.subscription_tier} 
+                      onChange={(e) => handleUpdateStatus(u.id, { subscription_tier: e.target.value })}
+                      style={{ background: 'transparent', color: 'inherit', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 5px' }}
+                    >
+                      <option value="free">Free</option>
+                      <option value="individual">Individual</option>
+                      <option value="team">Team</option>
+                    </select>
+                  </td>
+                  <td style={{ padding: '12px', fontSize: '0.8rem' }}>
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: '12px', display: 'flex', gap: '5px' }}>
+                    <button 
+                      className="btn btn-outline" 
+                      style={{ fontSize: '0.7rem' }}
+                      onClick={async () => {
+                        try {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          await axios.post(`/api/admin/users/${u.id}/reset-password`, {}, {
+                            headers: { Authorization: `Bearer ${session.access_token}` }
+                          });
+                          alert('Password reset link sent to ' + u.email);
+                        } catch (err) {
+                          alert('Reset failed: ' + err.message);
+                        }
+                      }}
+                    >
+                      Reset Pwd
+                    </button>
+                    <button 
+                      className="btn btn-outline" 
+                      style={{ fontSize: '0.7rem', color: 'var(--error)', borderColor: 'var(--error)' }}
+                      onClick={() => {
+                        if (confirm(`Revoke access for ${u.email}?`)) {
+                          handleUpdateStatus(u.id, { role: -1 }); 
+                        }
+                      }}
+                    >
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="glass card" style={{ maxWidth: '600px' }}>
+          <h3>Create New Account</h3>
+          <form onSubmit={handleCreateUser} style={{ marginTop: '20px' }}>
+            <div className="input-group">
+              <label>Full Name</label>
+              <input value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} required />
+            </div>
+            <div className="input-group">
+              <label>Email Address</label>
+              <input type="email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required />
+            </div>
+            <div className="input-group">
+              <label>Initial Password</label>
+              <input type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="input-group">
+                <label>Role</label>
+                <select value={newUser.role} onChange={e => setNewUser({...newUser, role: parseInt(e.target.value)})}>
+                  <option value={1}>Member (1)</option>
+                  <option value={2}>Lead (2)</option>
+                  <option value={5}>Superadmin (5)</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Tier</label>
+                <select value={newUser.tier} onChange={e => setNewUser({...newUser, tier: e.target.value})}>
+                  <option value="free">Free</option>
+                  <option value="individual">Individual</option>
+                  <option value="team">Team</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setView('list')}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Create User</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- App Root ---
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, profile } = useAuth();
 
   if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><RefreshCw className="animate-spin" /></div>;
 
@@ -370,7 +603,7 @@ function AppContent() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Layout><DiffEngine /></Layout>} />
       <Route path="/targets" element={<Layout><Targets /></Layout>} />
-      <Route path="/admin" element={user?.profile?.role >= 5 ? <Layout><h1>Admin Dashboard</h1></Layout> : <Navigate to="/" />} />
+      <Route path="/admin" element={profile?.role >= 5 ? <Layout><AdminDashboard /></Layout> : <Navigate to="/" />} />
     </Routes>
   );
 }

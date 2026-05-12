@@ -14,23 +14,46 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initial session check
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      await handleUser(session?.user ?? null);
+    };
+
+    initAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        setProfile(data);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
+      await handleUser(session?.user ?? null);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const handleUser = async (authUser) => {
+    setUser(authUser);
+    if (authUser) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (error) {
+          console.error('Profile fetch error:', error);
+          setProfile(null);
+        } else {
+          setProfile(data);
+        }
+      } catch (err) {
+        console.error('Unexpected auth error:', err);
+        setProfile(null);
+      }
+    } else {
+      setProfile(null);
+    }
+    setLoading(false);
+  };
 
   const signInWithGoogle = () => supabase.auth.signInWithOAuth({ provider: 'google' });
   const signOut = () => supabase.auth.signOut();
