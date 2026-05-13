@@ -164,6 +164,51 @@ app.post('/api/apply', authenticate, async (req, res) => {
   }
 });
 
+app.post('/api/migrate-data', authenticate, requireAuth, async (req, res) => {
+  if (!req.user || !req.user.profile || (req.user.profile.subscription_tier === 'free' && req.user.profile.role < 5)) {
+    return res.status(403).json({ error: 'Data Migration is a Premium feature. Please upgrade your subscription.' });
+  }
+
+  const { source, target, tableName, strategy } = req.body;
+  
+  try {
+    const resolvedSource = await resolveConfig(source, req.user);
+    const resolvedTarget = await resolveConfig(target, req.user);
+    
+    const sourceConfig = buildConnectionString(resolvedSource);
+    const targetConfig = buildConnectionString(resolvedTarget);
+
+    const sourceIntrospector = getIntrospector(resolvedSource.db_type, sourceConfig);
+    const targetIntrospector = getIntrospector(resolvedTarget.db_type, targetConfig);
+
+    const startTime = Date.now();
+    const batchSize = 500;
+    
+    if (strategy === 'truncate') {
+        await targetIntrospector.truncateTable(tableName);
+    }
+
+    const totalRows = await sourceIntrospector.getRowCount(tableName);
+    const totalBatches = Math.ceil(totalRows / batchSize);
+    
+    let rowsMigrated = 0;
+    for (let i = 0; i < totalBatches; i++) {
+        const offset = i * batchSize;
+        const rows = await sourceIntrospector.fetchDataBatch(tableName, batchSize, offset);
+        if (rows && rows.length > 0) {
+            await targetIntrospector.insertDataBatch(tableName, rows, strategy);
+            rowsMigrated += rows.length;
+        }
+    }
+
+    const timeMs = Date.now() - startTime;
+    res.json({ success: true, rowsMigrated, totalBatches, timeMs });
+  } catch (error) {
+    console.error('Migration Error:', error);
+    res.status(500).json({ error: `Migration Error: ${error.message}` });
+  }
+});
+
 // Targets CRUD
 app.get('/api/targets', authenticate, requireAuth, async (req, res) => {
     const { data, error } = await supabase

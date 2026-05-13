@@ -257,6 +257,32 @@ const DiffEngine = () => {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [savedTargets, setSavedTargets] = useState([]);
+  const [migrationStatus, setMigrationStatus] = useState({});
+  const [migrationStrategy, setMigrationStrategy] = useState('insert');
+
+  const handleMigrateData = async (tableName) => {
+    setMigrationStatus(prev => ({ ...prev, [tableName]: { state: 'migrating' } }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session ? { Authorization: `Bearer ${session.access_token}` } : {};
+      
+      const res = await axios.post('/api/migrate-data', { 
+          source, target, tableName, strategy: migrationStrategy 
+      }, { headers });
+      
+      setMigrationStatus(prev => ({ ...prev, [tableName]: { 
+          state: 'success', 
+          rows: res.data.rowsMigrated,
+          batches: res.data.totalBatches,
+          timeMs: res.data.timeMs
+      }}));
+    } catch (err) {
+      setMigrationStatus(prev => ({ ...prev, [tableName]: { 
+          state: 'error', 
+          error: err.response?.data?.error || err.message 
+      }}));
+    }
+  };
 
   useEffect(() => {
     const fetchSavedTargets = async () => {
@@ -459,7 +485,72 @@ const DiffEngine = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h2>Found {results?.scripts?.length || 0} Differences</h2>
                 </div>
-                {/* Result list logic would go here, same as before but integrated... */}
+                
+                <h3 style={{ marginTop: '30px', marginBottom: '15px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>Data Migration (Premium)</h3>
+                
+                <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <label>Conflict Strategy:</label>
+                    <select 
+                        value={migrationStrategy} 
+                        onChange={e => setMigrationStrategy(e.target.value)}
+                        className="input-group" style={{ marginBottom: 0, width: 'auto' }}
+                    >
+                        <option value="insert">Insert Only (Fail on conflict)</option>
+                        <option value="ignore">Insert & Ignore Existing (Skip conflicts)</option>
+                        <option value="truncate">Truncate & Insert (Wipe target first)</option>
+                    </select>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                            <th style={{ padding: '12px' }}>Table Name</th>
+                            <th style={{ padding: '12px' }}>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {Object.keys(results?.sourceMetadata?.tables || {}).map(tableName => {
+                            const isPremium = user?.profile?.role >= 5 || (user?.profile?.subscription_tier !== 'free');
+                            const status = migrationStatus[tableName] || { state: 'idle' };
+                            
+                            return (
+                                <tr key={tableName} style={{ borderBottom: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '12px' }}>
+                                        <Database size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle', color: 'var(--primary)' }} />
+                                        {tableName}
+                                    </td>
+                                    <td style={{ padding: '12px' }}>
+                                        {status.state === 'idle' && (
+                                            <button 
+                                                className="btn btn-outline" 
+                                                style={{ fontSize: '0.8rem', opacity: isPremium ? 1 : 0.5 }}
+                                                onClick={() => {
+                                                    if (!isPremium) {
+                                                        alert("Data Migration is a Premium feature. Superadmins and Paid users only.");
+                                                        return;
+                                                    }
+                                                    handleMigrateData(tableName);
+                                                }}
+                                            >
+                                                {!isPremium && <Lock size={12} style={{ marginRight: '5px' }} />}
+                                                Migrate Data
+                                            </button>
+                                        )}
+                                        {status.state === 'migrating' && (
+                                            <span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}><RefreshCw size={14} className="animate-spin" style={{ marginRight: '5px' }} /> Migrating...</span>
+                                        )}
+                                        {status.state === 'success' && (
+                                            <span style={{ color: 'var(--success)', fontSize: '0.85rem' }}>✓ Migrated {status.rows} rows in {status.timeMs}ms ({status.batches} batches)</span>
+                                        )}
+                                        {status.state === 'error' && (
+                                            <span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>✗ {status.error}</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
             </div>
         )}
     </div>
