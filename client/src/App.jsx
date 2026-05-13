@@ -251,11 +251,43 @@ const Targets = () => {
 
 const DiffEngine = () => {
   const { user, supabase } = useAuth();
-  const [source, setSource] = useState({ db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database: 'postgres' });
-  const [target, setTarget] = useState({ db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database: 'postgres' });
+  const [source, setSource] = useState({ target_id: '', db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database_name: 'postgres' });
+  const [target, setTarget] = useState({ target_id: '', db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database_name: 'postgres' });
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [savedTargets, setSavedTargets] = useState([]);
+
+  useEffect(() => {
+    const fetchSavedTargets = async () => {
+      if (user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            const res = await axios.get('/api/targets', { headers: { Authorization: `Bearer ${session.access_token}` } });
+            setSavedTargets(res.data);
+        }
+      }
+    };
+    fetchSavedTargets();
+  }, [user]);
+
+  const applySavedTarget = (t, setter) => {
+    if (!t) {
+        setter({ target_id: '', db_type: 'supabase', url: '', password: '', host: '', port: 5432, username: 'postgres', database_name: 'postgres' });
+        return;
+    }
+    const isSupabase = t.db_type === 'postgres' && t.host.includes('supabase.co');
+    setter({
+        target_id: t.id,
+        db_type: isSupabase ? 'supabase' : t.db_type,
+        url: t.host,
+        password: '', // Kept empty, backend uses target_id
+        host: t.host,
+        port: t.port,
+        username: t.username,
+        database_name: t.database_name || t.database
+    });
+  };
 
   const handleCompare = async () => {
     setLoading(true);
@@ -297,7 +329,21 @@ const DiffEngine = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '30px' }}>
                 <div>
                     <h3 style={{ marginBottom: '15px' }}>Source Database</h3>
-                    <div className="input-group">
+                    
+                    {user && savedTargets.length > 0 && (
+                        <div className="input-group">
+                            <label>Saved Target</label>
+                            <select value={source.target_id || ''} onChange={e => {
+                                const selected = savedTargets.find(t => t.id === e.target.value);
+                                applySavedTarget(selected, setSource);
+                            }}>
+                                <option value="">-- Manual Entry --</option>
+                                {savedTargets.map(t => <option key={t.id} value={t.id}>{t.name} ({t.host})</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    <div className="input-group" style={{ opacity: source.target_id ? 0.6 : 1, pointerEvents: source.target_id ? 'none' : 'auto' }}>
                         <label>DB Type</label>
                         <select value={source.db_type} onChange={e => setSource({...source, db_type: e.target.value})}>
                             <option value="supabase">Supabase</option>
@@ -307,40 +353,56 @@ const DiffEngine = () => {
                         </select>
                     </div>
 
-                    {source.db_type === 'supabase' && (
-                        <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: '6px', marginBottom: '15px', fontSize: '0.8rem' }}>
-                            <AlertCircle size={14} style={{ marginRight: '5px' }} />
-                            <strong>Pro Tip:</strong> Use the <strong>IPv4 Pooler</strong> host from your dashboard (aws-0-...) in the URL/Host field if you experience connection timeouts.
-                        </div>
-                    )}
+                    <div style={{ opacity: source.target_id ? 0.6 : 1, pointerEvents: source.target_id ? 'none' : 'auto' }}>
+                        {source.db_type === 'supabase' && (
+                            <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: '6px', marginBottom: '15px', fontSize: '0.8rem' }}>
+                                <AlertCircle size={14} style={{ marginRight: '5px' }} />
+                                <strong>Pro Tip:</strong> Use the <strong>IPv4 Pooler</strong> host from your dashboard (aws-0-...) in the URL/Host field if you experience connection timeouts.
+                            </div>
+                        )}
 
-                    <div className="input-group">
-                        <label>{source.db_type === 'mssql' ? 'Server Host' : 'URL / Host'}</label>
-                        <input value={source.url} onChange={e => setSource({...source, url: e.target.value})} placeholder={source.db_type === 'mssql' ? 'your-server.database.windows.net' : 'db.project.supabase.co'} />
-                    </div>
-                    {source.db_type === 'mssql' && (
                         <div className="input-group">
-                            <label>Username</label>
-                            <input value={source.username} onChange={e => setSource({...source, username: e.target.value})} />
+                            <label>{source.db_type === 'mssql' ? 'Server Host' : 'URL / Host'}</label>
+                            <input value={source.url} onChange={e => setSource({...source, url: e.target.value})} placeholder={source.db_type === 'mssql' ? 'your-server.database.windows.net' : 'db.project.supabase.co'} />
                         </div>
-                    )}
-                    <div className="input-group">
-                        <label>Password</label>
-                        <input type="password" value={source.password} onChange={e => setSource({...source, password: e.target.value})} />
-                    </div>
-                    {source.db_type === 'mssql' && (
+                        {source.db_type === 'mssql' && (
+                            <div className="input-group">
+                                <label>Username</label>
+                                <input value={source.username} onChange={e => setSource({...source, username: e.target.value})} />
+                            </div>
+                        )}
                         <div className="input-group">
-                            <label>Database Name</label>
-                            <input value={source.database_name} onChange={e => setSource({...source, database_name: e.target.value})} />
+                            <label>Password</label>
+                            <input type="password" value={source.target_id ? '********' : source.password} onChange={e => setSource({...source, password: e.target.value})} />
                         </div>
-                    )}
+                        {source.db_type === 'mssql' && (
+                            <div className="input-group">
+                                <label>Database Name</label>
+                                <input value={source.database_name} onChange={e => setSource({...source, database_name: e.target.value})} />
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div style={{ alignSelf: 'center', opacity: 0.3 }}><ArrowRight size={32} /></div>
 
                 <div>
                     <h3 style={{ marginBottom: '15px' }}>Target Database</h3>
-                    <div className="input-group">
+
+                    {user && savedTargets.length > 0 && (
+                        <div className="input-group">
+                            <label>Saved Target</label>
+                            <select value={target.target_id || ''} onChange={e => {
+                                const selected = savedTargets.find(t => t.id === e.target.value);
+                                applySavedTarget(selected, setTarget);
+                            }}>
+                                <option value="">-- Manual Entry --</option>
+                                {savedTargets.map(t => <option key={t.id} value={t.id}>{t.name} ({t.host})</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    <div className="input-group" style={{ opacity: target.target_id ? 0.6 : 1, pointerEvents: target.target_id ? 'none' : 'auto' }}>
                         <label>DB Type</label>
                         <select value={target.db_type} onChange={e => setTarget({...target, db_type: e.target.value})}>
                             <option value="supabase">Supabase</option>
@@ -350,33 +412,35 @@ const DiffEngine = () => {
                         </select>
                     </div>
 
-                    {target.db_type === 'supabase' && (
-                        <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: '6px', marginBottom: '15px', fontSize: '0.8rem' }}>
-                            <AlertCircle size={14} style={{ marginRight: '5px' }} />
-                            <strong>Pro Tip:</strong> Use the <strong>IPv4 Pooler</strong> host (Port 6543) for best reliability.
-                        </div>
-                    )}
+                    <div style={{ opacity: target.target_id ? 0.6 : 1, pointerEvents: target.target_id ? 'none' : 'auto' }}>
+                        {target.db_type === 'supabase' && (
+                            <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: '6px', marginBottom: '15px', fontSize: '0.8rem' }}>
+                                <AlertCircle size={14} style={{ marginRight: '5px' }} />
+                                <strong>Pro Tip:</strong> Use the <strong>IPv4 Pooler</strong> host (Port 6543) for best reliability.
+                            </div>
+                        )}
 
-                    <div className="input-group">
-                        <label>{target.db_type === 'mssql' ? 'Server Host' : 'URL / Host'}</label>
-                        <input value={target.url} onChange={e => setTarget({...target, url: e.target.value})} placeholder={target.db_type === 'mssql' ? 'your-server.database.windows.net' : 'db.target.supabase.co'} />
-                    </div>
-                    {target.db_type === 'mssql' && (
                         <div className="input-group">
-                            <label>Username</label>
-                            <input value={target.username} onChange={e => setTarget({...target, username: e.target.value})} />
+                            <label>{target.db_type === 'mssql' ? 'Server Host' : 'URL / Host'}</label>
+                            <input value={target.url} onChange={e => setTarget({...target, url: e.target.value})} placeholder={target.db_type === 'mssql' ? 'your-server.database.windows.net' : 'db.target.supabase.co'} />
                         </div>
-                    )}
-                    <div className="input-group">
-                        <label>Password</label>
-                        <input type="password" value={target.password} onChange={e => setTarget({...target, password: e.target.value})} />
-                    </div>
-                    {target.db_type === 'mssql' && (
+                        {target.db_type === 'mssql' && (
+                            <div className="input-group">
+                                <label>Username</label>
+                                <input value={target.username} onChange={e => setTarget({...target, username: e.target.value})} />
+                            </div>
+                        )}
                         <div className="input-group">
-                            <label>Database Name</label>
-                            <input value={target.database_name} onChange={e => setTarget({...target, database_name: e.target.value})} />
+                            <label>Password</label>
+                            <input type="password" value={target.target_id ? '********' : target.password} onChange={e => setTarget({...target, password: e.target.value})} />
                         </div>
-                    )}
+                        {target.db_type === 'mssql' && (
+                            <div className="input-group">
+                                <label>Database Name</label>
+                                <input value={target.database_name} onChange={e => setTarget({...target, database_name: e.target.value})} />
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
