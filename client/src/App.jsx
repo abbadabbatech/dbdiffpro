@@ -94,6 +94,8 @@ const Login = ({ isSignUp = false }) => {
   const [error, setError] = useState(null);
   const [mode, setMode] = useState(isSignUp ? 'signup' : 'login');
 
+  const navigate = useNavigate();
+
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -103,9 +105,15 @@ const Login = ({ isSignUp = false }) => {
         ? await supabase.auth.signUp({ email, password })
         : await supabase.auth.signInWithPassword({ email, password });
         
-    if (error) setError(error.message);
-    else if (mode === 'signup') alert('Check your email for the confirmation link!');
-    setLoading(false);
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else if (mode === 'signup') {
+      alert('Check your email for the confirmation link!');
+      setLoading(false);
+    } else {
+      navigate('/');
+    }
   };
 
   return (
